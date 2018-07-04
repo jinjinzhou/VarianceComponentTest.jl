@@ -4,7 +4,7 @@
 
 # VarianceComponentTest.jl
 
-**VarianceComponentTest.jl** is a Julia package for performing exact variance component tests in genome-wide association study (GWAS). It provides three types of exact tests
+**VarianceComponentTest.jl** is a Julia package for performing exact variance component tests in genetic studies for testing SNP set effects. It provides three types of exact tests
 
 * exact likelihood ratio test (*eLRT*)
 * exact restricted likelihood ratio test (*eRLRT*)
