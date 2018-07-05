@@ -110,7 +110,7 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
 
   # BED file:
   fid = open(plinkBedfile);
-  bedheader = mmap_array(Uint8, (3, 1), fid);
+  bedheader = read(fid, UInt8, 3)
   # decide BED file version and snp/individual-major
   # PLINK coding (bits->genotype): 00->1/1, 01->1/2, 10->Missing, 11->2/2
   # We use minor allele counts (0,1,2,nan) coding here
@@ -123,8 +123,12 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
     if bits(bedheader[3, 1]) == "00000001"
       # SNP-major
       #rawdata = mmap_array(Uint8, (iceil(nPer / 4), nSNP), fid, 3);
-      rawdata = mmap_array(Int8, (iceil(nPer / 4), nSNP), fid, 3);
-      SNPSize = ifloor(MemoryLimit / (32 * iceil(nPer / 4)));
+      plinkbits = Mmap.mmap(fid, BitArray, (2, 4ceil(Int, 0.25nPer), nSNP));
+      A1 = plinkbits[1, 1:nPer, :];
+      A2 = plinkbits[2, 1:nPer, :];
+
+      #rawdata = mmap_array(Int8, (iceil(nPer / 4), nSNP), fid, 3);
+      SNPSize = floor(MemoryLimit / (32 * ceil(nPer / 4)));
     else
       # individual-major
       error("gwasvctest:bedwrongn\n",
