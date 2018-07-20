@@ -16,5 +16,5 @@ Detailed documentation is [*here*](http://variancecomponenttestjl.readthedocs.or
 
 ```julia
 Pkg.update()
-Pkg.add("VarianceComponentTest")
+Pkg.clone("git@github.com:jinjinzhou/VarianceComponentTest.jl.git")
 ```
