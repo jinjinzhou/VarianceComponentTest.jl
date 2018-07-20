@@ -1,37 +1,43 @@
-function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
-                devices::String = "CPU", nMMmax::Int = 0,
-                nBlockAscent::Int = 1000, nNullSimPts::Int = 1000000,
-                nNullSimNewtonIter::Int = 15, tests::String = "eLRT",
-                tolX::Float64 = 1e-4,
-                vcInit::Array{Float64, 1} = Float64[],
-                Vform::String = "whole",
-                pvalueComputings::String = "chi2",
-                WPreSim::Array{Float64, 2} = [Float64[] Float64[]],
-                PrePartialSumW::Array{Float64, 2} = [Float64[] Float64[]],
-                PreTotalSumW::Array{Float64, 2} = [Float64[] Float64[]],
-                partialSumWConst::Array{Float64, 1} = Float64[],
-                totalSumWConst::Array{Float64, 1} = Float64[],
-                windowSize::Int = 50,
-                partialSumW::Array{Float64, 1} = Float64[],
-                totalSumW::Array{Float64, 1} = Float64[],
-                lambda::Array{Float64, 2} = [Float64[] Float64[]],
-                W::Array{Float64, 2} = [Float64[] Float64[]],
-                nPreRank::Int = 20,
-                tmpmat0::Array{Float64, 2} = [Float64[] Float64[]],
-                tmpmat1::Array{Float64, 2} = [Float64[] Float64[]],
-                tmpmat2::Array{Float64, 2} = [Float64[] Float64[]],
-                tmpmat3::Array{Float64, 2} = [Float64[] Float64[]],
-                tmpmat4::Array{Float64, 2} = [Float64[] Float64[]],
-                tmpmat5::Array{Float64, 2} = [Float64[] Float64[]],
-                denomvec::Array{Float64, 1} = Float64[],
-                d1f::Array{Float64, 1} = Float64[],
-                d2f::Array{Float64, 1} = Float64[], offset::Int = 0,
-                nPtsChi2::Int = 300,
-                simnull::Vector{Float64} = Float64[])
+@everywhere function vctest(y, X, V;
+                            bInit::Array{Float64, 1} = Float64[],
+                            devices::String = "CPU",
+                            nMMmax::Int = 0,
+                            nBlockAscent::Int = 1000,
+                            nNullSimPts::Int = 10000,
+                            nNullSimNewtonIter::Int = 15,
+                            tests::String = "eLRT",
+                            tolX::Float64 = 1e-6,
+                            vcInit::Array{Float64, 1} = Float64[],
+                            Vform::String = "whole",
+                            pvalueComputings::String = "chi2",
+                            WPreSim::Array{Float64, 2} = [Float64[] Float64[]],
+                            PrePartialSumW::Array{Float64, 2} = [Float64[] Float64[]],
+                            PreTotalSumW::Array{Float64, 2} = [Float64[] Float64[]],
+                            partialSumWConst::Array{Float64, 1} = Float64[],
+                            totalSumWConst::Array{Float64, 1} = Float64[],
+                            windowSize::Int = 50,
+                            partialSumW::Array{Float64, 1} = Float64[],
+                            totalSumW::Array{Float64, 1} = Float64[],
+                            lambda::Array{Float64, 2} = [Float64[] Float64[]],
+                            W::Array{Float64, 2} = [Float64[] Float64[]],
+                            nPreRank::Int = 20,
+                            tmpmat0::Array{Float64, 2} = [Float64[] Float64[]],
+                            tmpmat1::Array{Float64, 2} = [Float64[] Float64[]],
+                            tmpmat2::Array{Float64, 2} = [Float64[] Float64[]],
+                            tmpmat3::Array{Float64, 2} = [Float64[] Float64[]],
+                            tmpmat4::Array{Float64, 2} = [Float64[] Float64[]],
+                            tmpmat5::Array{Float64, 2} = [Float64[] Float64[]],
+                            denomvec::Array{Float64, 1} = Float64[],
+                            d1f::Array{Float64, 1} = Float64[],
+                            d2f::Array{Float64, 1} = Float64[],
+                            offset::Int = 0,
+                            nPtsChi2::Int = 300,
+                            simnull::Vector{Float64} = Float64[])
+
   # VCTEST Fit and test for the nontrivial variance component
   #
   # [SIMNULL] = VCTEST(y,X,V) fits and then tests for $H_0:sigma_1^2=0$ in
-  # the variance components model $Y \sim N(X \beta, vc0*I + vc1*V)$.
+  # the variance components model Y ~ N(X \beta, vc0*I + vc1*V).
   #
   #   INPUT:
   #       y - response vector
@@ -49,6 +55,7 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
   #           V.U*diag(V.E)*V.U'. Default is 'whole'. For computational
   #           efficiency,  a low rank 'half' should be used whenever possible
   #
+  #
   #   Output:
   #       b - estimated regression coeffiicents in the mean component
   #       vc0 - estiamted variance component for I
@@ -59,6 +66,62 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
   n = length(y);
   if size(V, 1) != n
     error("vctest:wrongdimV\n", "dimension of V does not match that of X");
+  end
+
+  # set up default matrices
+
+  if isempty(WPreSim)
+      WPreSim = randn(windowSize, nNullSimPts);
+      for idxWc = 1 : nNullSimPts
+          for idxWr = 1 : windowSize
+           WPreSim[idxWr, idxWc] = WPreSim[idxWr, idxWc] * WPreSim[idxWr, idxWc];
+          end
+      end
+  end
+  if isempty(partialSumW)
+      partialSumW = Array{Float64}(nNullSimPts);
+  end
+  if isempty(totalSumW)
+      totalSumW= Array{Float64}(nNullSimPts);
+  end
+  if isempty(lambda)
+      lambda = Array{Float64}(1, nNullSimPts);
+  end
+  if isempty(lambda)
+      W = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat0)
+      tmpmat0 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat1)
+      tmpmat1 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat2)
+      tmpmat2 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat3)
+      tmpmat3 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat4)
+      tmpmat4 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(tmpmat5)
+      tmpmat5 = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(denomvec)
+      denomvec = Array{Float64}(nNullSimPts);
+  end
+  if isempty(d1f)
+      d1f = Array{Float64}(nNullSimPts);
+  end
+  if isempty(d2f)
+      d2f = Array{Float64}(nNullSimPts);
+  end
+  if isempty(W)
+      W = Array{Float64}(windowSize, nNullSimPts);
+  end
+  if isempty(simnull)
+      simnull = Array{Float64}(nNullSimPts);
   end
 
   # set default maximum MM iteration
@@ -106,9 +169,9 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     evalVfull = evalVfull .^ 2;
     evalV = evalVfull[1:rankV];
     UV = UVfull[:, 1:rankV];
-    #if tests == "eLRT" || tests == "eRLRT"
-    #  wholeV = *(V, V');
-    #end
+    if tests == "eLRT" || tests == "eRLRT"
+      wholeV = *(V, V');
+    end
   elseif Vform == "eigen"
     UV = V.U;
     evalV = V.eval;
@@ -128,12 +191,12 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     psqrtV = pointer(sqrtV);
     pUV = pointer(UV);
     BLAS.blascopy!(n*rankV, pUV, 1, psqrtV, 1);
-    scale!(sqrtV, sqrt(evalV));
+    sqrtV = sqrtV * Diagonal(sqrt.(evalV));
   end
   if isempty(X)
     evalAdjV = evalV;
   else
-    subUX = Array(Float64, n, rankX);
+    subUX = Array{Float64}(n, rankX);
     psubUX = pointer(subUX);
     pUX = pointer(UX);
     BLAS.blascopy!(n*rankX, pUX, 1, psubUX, 1);
@@ -170,7 +233,7 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     if isempty(vcInit)
       vc0 = norm(r) ^ 2 / n;
       vc1 = 1;
-      wt = 1.0 ./ sqrt(vc1 * evalVfull + vc0);
+      wt = 1.0 ./ sqrt.(vc1 * evalVfull + vc0);
     else
       vc0 = vcInit[1];
       # avoid sticky boundary
@@ -181,8 +244,8 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
       if vc1 == 0
         vc1 = 1e-4;
       end
-      wt = 1.0 ./ sqrt(vc1 * evalVfull + vc0);
-      Xnew = scale(wt, Xrot);
+      wt = 1.0 ./ sqrt.(vc1 * evalVfull + vc0);
+      Xnew = Diagonal(wt) * Xrot;
       ynew = wt .* yrot;
       b = Xnew \ ynew;
     end
@@ -190,15 +253,9 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     # update residuals according supplied var. components
     r = y - BLAS.gemv('N', X, b);
     rnew = BLAS.gemv('T', UVfull, r);
-    #deltaRes = norm(r) ^ 2 - norm(rnew) ^ 2;
-    logl = loglConst + sum(log, wt) - 0.5 * sumabs2(rnew .* wt);
+    logl = loglConst + sum(log, wt) - 0.5 * sum(abs2,rnew .* wt);
 
     nIters = 0;
-    #bOld = similar(b);
-    #pbOld = pointer(bOld);
-    #pb = pointer(b);
-    #BLAS.blascopy!(length(b), pb, 1, pbOld, 1);
-    #denvec = similar(rnew);
     denvec = Float64[];
     for iBlockAscent = 1:nBlockAscent
 
@@ -208,24 +265,19 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
       for iMM = 1:nMMmax
         denvec = 1.0 ./ (vc1 * evalVfull + vc0);
         numvec = rnew .* denvec;
-        #vc0 = sqrt( (vc0 ^ 2 * sumabs2(numvec) + deltaRes) /
-        #            (sumabs(denvec) + (n - rankV) / vc0) );
-        vc0 = vc0 * sqrt(sumabs2(numvec) / sumabs(denvec));
-        vc1 = vc1 * sqrt( dot(numvec, numvec .* evalVfull) /
-                           sumabs(evalVfull .* denvec) );
+        vc0 = vc0 * sqrt.(sum(abs2,numvec) / sum(abs,denvec));
+        vc1 = vc1 * sqrt.( dot(numvec, numvec .* evalVfull) /
+                           sum(abs,evalVfull .* denvec) );
+
         #wt = 1.0 ./ sqrt(vc1 * evalVfull + vc0);
       end
 
-      # update fixed effects and residuals
-      #pb = pointer(b);
-      #BLAS.blascopy!(length(b), pb, 1, pbOld, 1);
-      wt = sqrt(denvec);
-      Xnew = scale(wt, Xrot);
+      wt = sqrt.(denvec);
+      Xnew = Diagonal(wt) * Xrot;
       ynew = wt .* yrot;
       b = Xnew \ ynew;
       r = y - BLAS.gemv('N', X, b);
       rnew = BLAS.gemv('T', UVfull, r);
-      #deltaRes = norm(r) ^ 2 - norm(rnew) ^ 2;
 
       # stopping criterion
       loglOld = logl;
@@ -355,7 +407,7 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     # restrictive log-likelihood at alternative
 
     loglConst = - 0.5 * (n - rankX) * log(2 * pi);
-    logLikeAlt =  loglConst - 0.5 * sum(log(tmpvec)) -
+    logLikeAlt =  loglConst - 0.5 * sum(log.(tmpvec)) -
       0.5 * (n - rankX - rankBVB) * log(vc0) - 0.5 * normYtilde2 / vc0 +
       0.5 * sum(resnew .^ 2 .* (1 / vc0 - 1 ./ (tmpvec)));
     # restrictive log-likelihood at null
@@ -399,8 +451,8 @@ function vctest(y, X, V; bInit::Array{Float64, 1} = Float64[],
     else
       Xrot = UV' * X;
       yrot = UV' * y;
-      wt = 1.0 ./ sqrt(vc1 * evalV + vc0);
-      Xnew = scale(wt, Xrot);
+      wt = 1.0 ./ sqrt.(vc1 * evalV + vc0);
+      Xnew = Diagonal(wt) * Xrot;
       ynew = wt .* yrot;
       b = Xnew \ ynew;
     end
