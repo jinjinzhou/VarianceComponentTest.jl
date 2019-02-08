@@ -1,4 +1,4 @@
-@everywhere function vctestnullsim(teststat, evalV, evalAdjV, n, rankX, WPreSim;
+ function vctestnullsim(teststat, evalV, evalAdjV, n, rankX, WPreSim;
   device::String = "CPU", nSimPts::Int = 10000, nNewtonIter::Int = 15,
   test::String = "eLRT", pvalueComputing::String = "chi2",
   PrePartialSumW::Array{Float64, 2} = [Float64[] Float64[]],
@@ -18,7 +18,7 @@
   denomvec::Array{Float64, 1} = Float64[],
   d1f::Array{Float64, 1} = Float64[],
   d2f::Array{Float64, 1} = Float64[], offset::Int = 0,
-  nPtsChi2::Int = 300, simnull::Vector{Float64} = Float64[])
+  nPtsChi2::Int = 300, simnull::Array{Float64, 1} = Float64[])
   # VCTESTNULLSIM Simulate null distribution for testing zero var. component
   #
   # VCTESTNULLSIM(evalV,evalAdjV,n,rankX,WPreSim) simulate the null distributions
@@ -49,6 +49,8 @@
 
     # Preparations
     #nPtsChi2 = 300;
+    Random.seed!(0)
+
     if size(WPreSim, 1) < rankAdjV
       newSim = randn(rankAdjV - size(WPreSim, 1), nSimPts) .^ 2;
       if isempty(WPreSim)
@@ -84,8 +86,7 @@
         BLAS.blascopy!(nSimPts, pptw, 1, ptw, 1);
       end
     end
-
-    # create null distribution samples
+        # create null distribution samples
     if test == "eLRT" || test == "eRLRT"
 
       # set effective sample size
@@ -104,6 +105,7 @@
         threshold = BLAS.asum(length(evalAdjV), evalAdjV, 1) / ne;
       end
 
+
       if pvalueComputing == "MonteCarlo"
         counter = 0;
         for i = 1 : nSimPts
@@ -120,11 +122,11 @@
         fill!(lambda, 0.0);
         #fill!(lambda, 1e-5);
       else
-        counter = 0;
+       counter=0
         for i = 1 : nSimPts
           pW = pointer(WPreSim) + (i - 1) * size(WPreSim, 1) * sizeof(Float64);
           if BLAS.dot(rankAdjV, pW, 1, evalAdjV, 1) / totalSumWConst[i] > threshold
-            counter += 1;
+              counter += 1;
             if counter <= nPtsChi2
               partialSumW[counter] = partialSumWConst[i];
               totalSumW[counter] = totalSumWConst[i];
@@ -255,23 +257,23 @@
         end
 
       end
-
       # collect null distribution samples
       if test == "eLRT"
-        tmpmat6 = Array{Float64}(rankV, counter);
+         tmpmat6 = Array{Float64}(undef, rankV, counter);
         if pvalueComputing == "MonteCarlo"
-          #BLAS.gemm!('N', 'N', 1.0, reshape(evalV, rankV, 1), lambda[:, 1:counter], 0.0,
-    #             tmpmat6);
-        tmpmat6 = reshape(evalV, rankV, 1) * lambda[:, 1:counter];
+          LinearAlgebra.BLAS.gemm!('N', 'N', 1.0, reshape(evalV, rankV, 1), lambda[:, 1:counter], 0.0,
+                tmpmat6);  ##jz: update from reshape
+        # tmpmat6 = reshape(evalV, rankV, 1) * lambda[:, 1:counter];
         else
-          #BLAS.gemm!('N', 'N', 1.0, reshape(evalV, rankV, 1), lambda, 0.0,
-        #             tmpmat6);
+          # # LinearAlgebra.BLAS.gemm!('N', 'N', 1.0, reshape(evalV, rankV, 1), lambda, 0.0,
+          #           # tmpmat6);
         tmpmat6 = reshape(evalV, rankV, 1) * lambda;
+
         end
-        simnull = Array{Float64}(counter);
+         simnull = Array{Float64}(undef, counter);
         for j = 1 : counter
-          tmpsum1 = 0.0;
-          tmpprod = 0.0;
+           tmpsum1 = 0.0;
+           tmpprod = 0.0;
           for i = 1 : rankAdjV
             tmpmat0[i, j] = evalAdjV[i] * lambda[j] + 1;
             tmpmat1[i, j] = W[i, j] / tmpmat0[i, j];
@@ -280,11 +282,12 @@
           for i = 1 : rankV
             tmpprod += log(tmpmat6[i, j] + 1);
           end
-          simnull[j] = ne * log(totalSumW[j]) -
+            simnull[j] = ne * log(totalSumW[j]) -
             ne * log(tmpsum1 + partialSumW[j]) - tmpprod;
+            # println("tmpprod",tmpprod)
         end
       else
-        simnull = Array{Float64}(counter);
+        simnull = Array{Float64}(undef, counter);
         for j = 1 : counter
           tmpsum1 = 0.0;
           tmpprod = 0.0;
@@ -294,7 +297,7 @@
             tmpmat1[i, j] = W[i, j] / tmpmat0[i, j];
             tmpsum1 += tmpmat1[i, j];
           end
-          simnull[j] = ne * log(totalSumW[j]) -
+            simnull[j] = ne * log(totalSumW[j]) -
             ne * log(tmpsum1 + partialSumW[j]) - tmpprod;
         end
       end
@@ -317,11 +320,11 @@
           simnull[j] = max(tmpsum / totalSumWConst[j], threshold);
         end
       else
-        counter = 0;
+         counter = 0;
         for j = 1 : nSimPts
-          tmpsum = 0.0;
+        tmpsum = 0.0;
           for i = 1 : rankAdjV
-            tmpsum += WPreSim[i, j] * evalAdjV[i];
+           tmpsum += WPreSim[i, j] * evalAdjV[i];
           end
           tmpvalue = tmpsum / totalSumWConst[j];
           if tmpvalue > threshold
@@ -341,18 +344,19 @@
 
     # compute empirical p-value
     if pvalueComputing == "MonteCarlo"
-      pvalue = countnz(simnull .>= teststat) / length(simnull);
+      pvalue = sum(simnull .>= teststat) / length(simnull);
       return pvalue;
     elseif pvalueComputing == "chi2"
       if test == "eScore" && counter < nPtsChi2
-        #println(counter, ", ", offset + 1);
         tmpsimnull = simnull[1:counter];
         ahat = var(tmpsimnull) / (2 * mean(tmpsimnull));
         bhat = 2 * (mean(tmpsimnull) ^ 2) / var(tmpsimnull);
+
       else
         ahat = var(simnull) / (2 * mean(simnull));
         bhat = 2 * (mean(simnull) ^ 2) / var(simnull);
       end
+
       #if mean(simnull) == 0 && var(simnull) == 0
         #pvalue = 1.0;
         #println("Invalid p-value occur! Starting from row ", offset+1);
@@ -366,12 +370,20 @@
         #println("mean of simnull = ", mean(simnull), ", var = ", var(simnull));
         #println("length of simnull = ", length(simnull), ", sum = ", sum(simnull));
       #else
-        #println("mean of simnull = ", mean(simnull), ", var = ", var(simnull));
-        #println("length of simnull = ", length(simnull), ", sum = ", sum(simnull));
-        #println("ahat = ", ahat, ", bhat = ", bhat, ", teststat = ", teststat, ", patzero = ", patzero);
+        # println("mean of simnull = ", mean(simnull), ", var = ", var(simnull));
+        # println("length of simnull = ", length(simnull), ", sum = ", sum(simnull));
+        # println("ahat = ", ahat, ", bhat = ", bhat, ", teststat = ", teststat, ", patzero = ", 1-patzero);
+        # println("weight",(1 - cdf(Chisq(bhat), teststat / ahat)))
+      # if isnan(bhat)
+      #     pvalue = (1 - patzero) * 1;
+      # else
+      #     pvalue = (1 - patzero) * (1 - cdf(Chisq(bhat), teststat / ahat));
+      # end
+
+
       pvalue = (1 - patzero) * (1 - cdf(Chisq(bhat), teststat / ahat));
       if teststat == 0; pvalue = pvalue + patzero; end;
-      #end
+
       return pvalue;
     end
 
