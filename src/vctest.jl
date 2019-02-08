@@ -1,6 +1,7 @@
 
 using Random
 using RCall
+using LinearAlgebra
 function vctest(y, X, V;
                     bInit::Array{Float64, 1} = Float64[],
                     devices::String = "CPU",
