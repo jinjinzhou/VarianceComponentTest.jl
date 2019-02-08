@@ -123,9 +123,9 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
     if bits(bedheader[3, 1]) == "00000001"
       # SNP-major
       #rawdata = mmap_array(Uint8, (iceil(nPer / 4), nSNP), fid, 3);
-      plinkbits = Mmap.mmap(fid, BitArray, (2, 4ceil(Int, 0.25nPer), nSNP));
-      A1 = plinkbits[1, 1:nPer, :];
-      A2 = plinkbits[2, 1:nPer, :];
+      rawdata = Mmap.mmap(fid, BitArray, (2, 4ceil(Int, 0.25nPer), nSNP));
+      A1 = rawdata[1, 1:nPer, :];
+      A2 = rawdata[2, 1:nPer, :];
 
       #rawdata = mmap_array(Int8, (iceil(nPer / 4), nSNP), fid, 3);
       SNPSize = floor(MemoryLimit / (32 * ceil(nPer / 4)));
@@ -143,7 +143,7 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
   end
   close(fid);
   # number of read times
-  nReads = iceil(nSNP / SNPSize);
+  nReads = ceil(nSNP / SNPSize);
 
   # check if provide SNP annotation file
   if isempty(annotationFile)
@@ -152,7 +152,7 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
     flagAnnotate = true;
     grpInfo = zeros(Int64, nSNP);
     offsetSize = zeros(Int64, nSNP);
-    geneName = Array(String, nSNP);
+    geneName = Array{String}(nSNP);
     readAnnotate!(annotationFile, snpID, nSNP, grpInfo, offsetSize, geneName);
     grpInfo = grpInfo[grpInfo .> 0];
     nGrp = length(grpInfo);
@@ -315,10 +315,10 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
     # phenotype file (no headerline) format: FamID IndID Trait1 Trait2 ...
     # Only Trait1 will be read
     y = readdlm(traitFile);
-    if size(y, 1) != nPer
-      error("gwasvctest:ywrongn\n",
-            "# individuals in trait file does not match plink files");
-    end
+    #if size(y, 1) != nPer
+     # error("gwasvctest:ywrongn\n",
+    #        "# individuals in trait file does not match plink files");
+    #end
     y = y[:, 3];
     y = convert(Array{Float64, 1}, y);
   end
@@ -330,11 +330,12 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
   else
     # user provided covariates (intercept if exists has to be provided)
     X = readdlm(covFile);
-    if size(X, 1) != nPer
-      error("gwasvctest:covwrongn\n",
-            "# individuals in covariate file does not match plink files");
-    end
-    X = [ones(nPer, 1) X[:, 3:end]];
+    nPerWithX = size(X,1);
+    #if size(X, 1) != nPer
+    #  error("gwasvctest:covwrongn\n",
+    #        "# individuals in covariate file does not match plink files");
+    #end
+    X = [ones(nPerWithX, 1) X[:, 3:end]];
     X = convert(Array{Float64, 2}, X);
   end
 
@@ -347,7 +348,7 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
   X = X[keepIdx, :];
   meanX = zeros(size(X, 2));
   for i = 1:length(meanX)
-    meanX[i] = mean(X[:, i][!isnan(X[:, i])]);
+    meanX[i] = mean(X[:, i][.!isnan.(X[:, i])]);
   end
   ridx, cidx = ind2sub(size(X), find(isnan(X)));
   X[sub2ind(size(X), find(isnan(X)))] = meanX[cidx];
@@ -360,10 +361,10 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
 
   # if provide annotation file, avoid large gene set
   if flagAnnotate
-    numExceed = countnz(grpInfo .> ifloor(nPerKeep / 4));
+    numExceed = countnz(grpInfo .> floor(nPerKeep / 4));
     for i = 1 : numExceed
-      tmpidx = find(grpInfo .> ifloor(nPerKeep / 4))[1];
-      innerItr = iceil(grpInfo[tmpidx] / windowSize);
+      tmpidx = find(grpInfo .> floor(nPerKeep / 4))[1];
+      innerItr = ceil(grpInfo[tmpidx] / windowSize);
       tmpgrpInfo = zeros(Int64, innerItr);
       tmpoffsetSize = zeros(Int64, innerItr);
       for j = 1 : innerItr
@@ -561,14 +562,17 @@ function gwasvctest(args...; covFile::String = "", device::String = "CPU",
       if i > 1
         totaloffset += nSNPParallel[i-1];
       end
-      nReadsParallel[i] = iceil(nSNPParallel[i] / SNPSize);
+      nReadsParallel[i] = ceil(nSNPParallel[i] / SNPSize);
       rawdataParallel[i] =
         rawdata[:, totaloffset+1 : totaloffset+nSNPParallel[i]];
       snpIDParallel[i] = snpID[totaloffset+1 : totaloffset+nSNPParallel[i]];
     end
     # loop over windows
-    outresults = pmap(loopwinFixsize, nSNPParallel, nReadsParallel,
-                      rawdataParallel, snpIDParallel,
+    outresults = pmap(loopwinFixsize,
+                      nSNPParallel,
+                      nReadsParallel,
+                      rawdataParallel,
+                      snpIDParallel,
                       [bin2geno for i = 1:ncores],
                       [nPer for i = 1:ncores],
                       [SNPSize for i = 1:ncores],
