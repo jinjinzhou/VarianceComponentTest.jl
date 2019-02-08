@@ -2,7 +2,7 @@ function readAnnotate!(annotationFile::String, snpID::Vector{String},
                        nSNP::Int, grpInfo::Vector{Int64},
                        offsetSize::Vector{Int64}, geneName::Vector{String})
 
-  annotatedata = readdlm(annotationFile, ',');
+  annotatedata = readdlm(annotationFile, ' ');
   annotatedata = convert(Array{String, 2}, annotatedata);
   annotatesnp = annotatedata[:, 2];
   nAnno = size(annotatedata, 1);
@@ -34,6 +34,7 @@ function readAnnotate!(annotationFile::String, snpID::Vector{String},
       end
       pregene = curgene;
     end
+    annoIdx = 1;
 
   end
 
