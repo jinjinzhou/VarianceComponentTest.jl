@@ -1,3 +1,4 @@
+ using Distributions
  function vctestnullsim(teststat, evalV, evalAdjV, n, rankX, WPreSim;
   device::String = "CPU", nSimPts::Int = 10000, nNewtonIter::Int = 15,
   test::String = "eLRT", pvalueComputing::String = "chi2",
