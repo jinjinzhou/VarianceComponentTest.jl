@@ -1,6 +1,4 @@
 [![Build Status](https://travis-ci.org/Tao-Hu/VarianceComponentTest.jl.svg?branch=master)](https://travis-ci.org/Tao-Hu/VarianceComponentTest.jl)
-[![Coverage Status](https://coveralls.io/repos/Tao-Hu/VarianceComponentTest.jl/badge.svg?branch=master)](https://coveralls.io/r/Tao-Hu/VarianceComponentTest.jl?branch=master)
-[![VarianceComponentTest](http://pkg.julialang.org/badges/VarianceComponentTest_release.svg)](http://pkg.julialang.org/?pkg=VarianceComponentTest&ver=release)
 
 # VarianceComponentTest.jl
 
